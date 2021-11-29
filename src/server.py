@@ -14,4 +14,4 @@ def register_blueprint(app):
 
 def run_server():
 	register_blueprint(app)
-	app.run(host="0.0.0.0")
+	app.run()
