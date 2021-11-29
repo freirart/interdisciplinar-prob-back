@@ -13,9 +13,5 @@ def register_blueprint(app):
 
 
 def run_server():
-	port = os.environ.get("PORT") or 5000
-
 	register_blueprint(app)
-
-	print("> Starting app on port:", port)
-	app.run(host="0.0.0.0", threaded=False, port=port)
+	app.run(host="0.0.0.0")
