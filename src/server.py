@@ -1,3 +1,4 @@
+import os
 from flask import Flask
 from flask_cors import CORS
 
@@ -12,9 +13,9 @@ def register_blueprint(app):
 
 
 def run_server():
-	port = 5000
+	port = os.environ.get("PORT") or 5000
 
 	register_blueprint(app)
 
-	print("> Starting app")
+	print("> Starting app on port:", port)
 	app.run(host="0.0.0.0", threaded=False, port=port)
