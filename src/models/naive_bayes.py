@@ -14,11 +14,16 @@ assumption_key = "Suposição"
 name_key = "Nome"
 gender_key = "Gênero"
 
+ending_key = "Final"
+penultimate_key = "Penúltima"
+
 
 class NaiveBayes(object):
 
     def __init__(self):
         self.file_path = os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir, os.pardir, 'public'))
+        self.ending_char_set = ["a", "e", "o", "y"]
+        self.penultimate_char_set = ["i"]
         self.set_initial_data()
 
     
@@ -33,56 +38,66 @@ class NaiveBayes(object):
         self.names = names
 
         self.training_set = names[:training_test_divisor]
-        self.training_set = names[:training_test_divisor]
         self.testing_set = names[training_test_divisor:test_validation_divisor]
         self.validation_set = names[test_validation_divisor:]
 
 
-    def get_ending_char_probabilities_by_gender(self, my_set):
-        char_set = ["a", "e", "o"]
+    def name_set_characteristics(self, my_set):
         characteristics_dict = {}
-        for char in char_set:
+        for char in self.ending_char_set + self.penultimate_char_set:
             characteristics_dict[char] = 0
 
-        masculine_names_ending_in = characteristics_dict.copy()
-        feminine_names_ending_in = characteristics_dict.copy()
+        male_characteristics = characteristics_dict.copy()
+        female_characteristics = characteristics_dict.copy()
 
         for item in my_set:
+            item_name_penultimate_char = normalize("NFKD", item[name_key][-2:-1]).encode("ASCII","ignore").decode("ASCII")
             item_name_ending_char = normalize("NFKD", item[name_key][-1:]).encode("ASCII","ignore").decode("ASCII")
             item_gender = item[gender_key]
 
             if item_name_ending_char in characteristics_dict:
                 if item_gender == feminine_char:
-                    feminine_names_ending_in[item_name_ending_char] += 1
+                    female_characteristics[item_name_ending_char] += 1
                 elif item_gender == masculine_char:
-                    masculine_names_ending_in[item_name_ending_char] += 1
+                    male_characteristics[item_name_ending_char] += 1
+                    
+            if item_name_penultimate_char in characteristics_dict:
+                if item_gender == feminine_char:
+                    female_characteristics[item_name_penultimate_char] += 1
+                elif item_gender == masculine_char:
+                    male_characteristics[item_name_penultimate_char] += 1
+                    
 
         num_of_feminine = len([item for item in my_set if item[gender_key] == feminine_char])
         num_of_masculine = len([item for item in my_set if item[gender_key] == masculine_char])
 
-        ending_char_probabilities_by_gender = {}
+        characteristics_by_gender = {}
 
-        for char in char_set:
-            curr_feminine_prob = (feminine_names_ending_in[char] / num_of_feminine) or 1
-            curr_masculine_prob = (masculine_names_ending_in[char] / num_of_masculine) or 1
+        for char in self.ending_char_set + self.penultimate_char_set:
+            curr_feminine_prob = (female_characteristics[char] / num_of_feminine) or 1
+            curr_masculine_prob = (male_characteristics[char] / num_of_masculine) or 1
             
-            ending_char_probabilities_by_gender[char] = {}
+            key_to_use = ending_key if char in self.ending_char_set else penultimate_key
+            
+            if key_to_use not in characteristics_by_gender or not isinstance(characteristics_by_gender[key_to_use], dict):
+                characteristics_by_gender[key_to_use] = {}
 
-            ending_char_probabilities_by_gender[char][feminine_key] = curr_feminine_prob
-            ending_char_probabilities_by_gender[char][masculine_key] = curr_masculine_prob
+            characteristics_by_gender[key_to_use][char] = {}
+
+            characteristics_by_gender[key_to_use][char][feminine_key] = curr_feminine_prob
+            characteristics_by_gender[key_to_use][char][masculine_key] = curr_masculine_prob
 
 
-        return ending_char_probabilities_by_gender
+        return characteristics_by_gender
 
 
     def get_model_info(self):
-        analysis_table = self.get_ending_char_probabilities_by_gender(self.training_set)
+        analysis_table = self.name_set_characteristics(self.names)
 
-        for item in self.training_set:
-            item_name_ending_char = item[name_key][-1:]
-            item[assumption_key] = self.get_assumption(item_name_ending_char, analysis_table)
+        for item in self.names:
+            item[assumption_key] = self.get_assumption(item[name_key], analysis_table)
 
-        comparison = self.compare_assumption_with_reality(self.training_set)
+        comparison = self.compare_assumption_with_reality(self.names)
         
         true_positive = comparison["true_positive"]
         true_negative = comparison["true_negative"]
@@ -148,25 +163,33 @@ class NaiveBayes(object):
         return true_positive / (true_positive + false_negative)
     
     
-    def get_assumption(self, ending_char, analysis_table):
-        assumption = masculine_char
+    def get_assumption(self, name, analysis_table):
+        ending_char = name[-1:]
+        penultimate_char = name[-2:-1]
+
+        feminine_prob = 0
+        masculine_prob = 0
         
-        if ending_char in analysis_table:
-            char_probability_by_gender = analysis_table[ending_char]
+        if ending_char in analysis_table[ending_key]:
+            char_probability_by_gender = analysis_table[ending_key][ending_char]
+            
+            masculine_prob += log(char_probability_by_gender[masculine_key])
+            feminine_prob +=log(char_probability_by_gender[feminine_key])
 
-            if log(char_probability_by_gender[feminine_key]) > log(char_probability_by_gender[masculine_key]):
-                assumption = feminine_char
+        if penultimate_char in analysis_table[penultimate_key]:
+            char_probability_by_gender = analysis_table[penultimate_key][penultimate_char]
+            
+            masculine_prob += log(char_probability_by_gender[masculine_key])
+            feminine_prob +=log(char_probability_by_gender[feminine_key])
 
-        return assumption
+        return feminine_char if feminine_prob > masculine_prob else masculine_char
 
     def names_by_gender(self, names_list):
-        analysis_table = self.get_ending_char_probabilities_by_gender(self.training_set)
+        analysis_table = self.name_set_characteristics(self.names)
         names_by_gender = {}
         
         for name in names_list:
-            ending_char = name[-1:]
-            
-            if self.get_assumption(ending_char, analysis_table) == feminine_char:
+            if self.get_assumption(name, analysis_table) == feminine_char:
                 names_by_gender[name] = feminine_key
             else:
                 names_by_gender[name] = masculine_key
