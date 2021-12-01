@@ -16,7 +16,6 @@ class NaiveBayesRoutes(restful.Resource):
         try:
             data = request.get_json()
         except Exception as e:
-            # print(e, request.get_data())
             data = loads(request.get_data().decode("ISO-8859-1"))
         
         if isinstance(data, dict) and "nomes" in data and isinstance(data["nomes"], list):
